@@ -1,0 +1,15 @@
+GET http://localhost:3000/tournaments/test1
+
+###
+
+PUT http://localhost:3000/tournaments
+content-type: application/json
+
+{
+  "id": "test1",
+  "name": "Test 1",
+  "created": "2022-07-11T23:50:43.000Z",
+  "tournament_id": "test1",
+  "version": 2,
+  "json": "{players:[]}"
+}
