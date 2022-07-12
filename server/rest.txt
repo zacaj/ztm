@@ -1,6 +1,9 @@
 GET http://localhost:3000/tournaments/test1
 
 ###
+GET http://zacaj.com:3000/tournaments/test1
+
+###
 
 PUT http://localhost:3000/tournaments
 content-type: application/json
@@ -10,6 +13,10 @@ content-type: application/json
   "name": "Test 1",
   "created": "2022-07-11T23:50:43.000Z",
   "tournament_id": "test1",
-  "version": 2,
-  "json": "{players:[]}"
+  "version": 8,
+  "players":
+  [
+    {"num": 1, "name": "Zac"},
+    {"num": 2, "name": "Ron"}
+  ]
 }
