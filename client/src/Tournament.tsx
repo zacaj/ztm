@@ -1,6 +1,9 @@
 import React, {useCallback, useEffect, useState} from "react";
 import { Routes, Route, useParams } from "react-router-dom";
 import styled from "styled-components";
+import { Button } from "./common";
+import { Form } from "./Form";
+import { Modal } from "./Modal";
 import { Cell, Table } from "./Table";
 
 export type Tournament = {
@@ -15,19 +18,11 @@ export type Player = {
   disabled?: true;
 };
 
-const Button = styled.button`
-  outline: none;
-  background: #EEE;
-  border: 1px solid grey;
-  border-radius: 3px;
-  padding: 2px 4px;
-  cursor: pointer;
-`;
-
 export function TournamentApp() {
   const {id} = useParams();
   const [message, setMessage] = useState<string>();
   const [tour, setTour] = useState<Tournament>({} as Tournament);
+  const [showAddPlayer, setShowAddPlayer] = useState(false);
   // const [players, setPlayers] = useState<Player[]>([]);
 
   // useEffect(() => {
@@ -61,7 +56,7 @@ export function TournamentApp() {
     });
   }, [id]);
 
-  const update = useCallback((t: Tournament) => {
+  const update = useCallback((t: Tournament) => 
     fetch(`http://localhost:3000/tournaments`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({...t, version: t.version+1}, null, 2)})
     .then(async res => {
       if (res.ok) {
@@ -74,8 +69,8 @@ export function TournamentApp() {
     })
     .catch(err => {
       console.error('err: ', err);
-    });
-  }, []);
+    })
+  , []);
 
   const toggleState = useCallback((player: Player) => {
     if (player.disabled)
@@ -86,10 +81,16 @@ export function TournamentApp() {
     update(tour);
   }, [update, tour]);
 
+  const addPlayer = useCallback(async (player: Player) => {
+    tour.players.push({...player, num: tour.players.length+1});
+    await update(tour);
+    setShowAddPlayer(false);
+  }, [update, tour]);
+
   const renderPlayer = useCallback((row: Player) => ([
     'num',
     'name',
-    <Cell><Button type="button" onClick={() => toggleState(row)}>
+    <Cell><Button onClick={() => toggleState(row)}>
       {row.disabled? 'ENABLE' : 'disable'}
     </Button></Cell>,
   ]), [toggleState]);
@@ -99,11 +100,15 @@ export function TournamentApp() {
 
   return <>
     <h1>{tour.name}</h1>
+    <Button  onClick={() => setShowAddPlayer(true)}>Add Player</Button>
     <Table data={tour.players}
       cols={['#', 'Name', 'Status']}
       expand="Name"
       title="Players"
       render={renderPlayer}
     />
+    {showAddPlayer && <Modal onClose={() => setShowAddPlayer(false)}>
+      <Form fields={['name', 'ifpaNum']} onSubmit={addPlayer} />
+    </Modal>}
   </>;
 }

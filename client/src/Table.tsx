@@ -34,7 +34,7 @@ export function Table({data, cols, render, expand, title}: {data: {[key: string]
     {cols.map(c => <HeaderCell>{c}</HeaderCell>)}
     {data.flatMap(row => {
       if (render)
-        return render(row).map(cell => typeof cell === 'string'? <Cell>{cell}</Cell> : cell);
+        return render(row).map(cell => typeof cell === 'string'? <Cell>{row[cell]}</Cell> : cell);
       else
         return cols.map(c => <Cell>{row[c]}</Cell>);
     })}
