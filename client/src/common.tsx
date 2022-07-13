@@ -28,7 +28,7 @@ export const FormGrid = styled.form`
   column-gap: 10px;
 `;
 
-export function getAllPropertyNames (obj: any) {
+export function getAllPropertyNames(obj: any) {
   const proto     = Object.getPrototypeOf(obj);
   if (!proto) return [];
   const inherited: any = (proto) ? getAllPropertyNames(proto) : [];
@@ -97,6 +97,7 @@ declare global {
       take(num: number, rand?: () => number): T[];
       rand(rand?: () => number): T;
       truthy(): Array<NonNullable<T>>;
+      findLast(pred: (e: T) => boolean): T|undefined;
   }
 }
 
@@ -153,4 +154,12 @@ Array.prototype.take = function<T>(this: T[], num: number, rand: () => number = 
     ret.push(t);
   }
   return ret;
+};
+
+Array.prototype.findLast = function<T>(this: T[], pred: (e: T) => boolean): T|undefined {
+  for (let i = this.length-1; i>=0; i--) {
+    if (pred(this[i]))
+      return this[i];
+  }
+  return undefined;
 };

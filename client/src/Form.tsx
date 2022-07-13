@@ -3,7 +3,7 @@ import styled from "styled-components";
 import { Button, FormGrid, Input, Label } from "./common";
 
 
-export function Form({children, fields, data: orig, onSubmit}: {children?: ReactNode[], fields: string[], onSubmit: (obj: any) => void; data?: any}) {
+export function Form({children, fields, data: orig, onSubmit}: {children?: ReactNode[]; fields: string[]; onSubmit: (obj: any) => void; data?: any}) {
   const [data, setData] = useState<any>({...orig});
   return <>
     <FormGrid onSubmit={(e) => {e.preventDefault(); onSubmit(data); }}>

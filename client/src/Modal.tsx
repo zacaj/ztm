@@ -22,7 +22,7 @@ const Root = styled.div`
 `;
 
 
-export function Modal({children, onClose}: {children: ReactNode[], onClose: () => void}) {
+export function Modal({children, onClose}: {children: ReactNode[]; onClose: () => void}) {
   return <Container onClick={onClose}>
     <Root onClick={e => e.stopPropagation()}>{children}</Root>
   </Container>;

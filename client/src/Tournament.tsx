@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useState} from "react";
+import React, {useCallback, useEffect, useMemo, useState} from "react";
 import { Routes, Route, useParams } from "react-router-dom";
 import styled from "styled-components";
 import { Button, FormGrid, Input, jsonParse, jsonStringify, Label } from "./common";
@@ -18,9 +18,13 @@ export type Player = {
   num: number;
   name: string;
   disabled?: true;
+  lastMatch?: Match;
+  currentMatch?: Match;
+  timeInQueue?: number;
 };
 export type Machine = {
   name: string;
+  disabled?: true;
 };
 export type Match = {
   num: number;
@@ -36,6 +40,7 @@ const Column = styled.div`
   flex-direction: column;
   margin-right: 20px;
   flex-wrap: wrap;
+  gap: 5px;
 `;
 const Page = styled.div`
   display: flex;
@@ -45,16 +50,33 @@ const Page = styled.div`
 export function TournamentApp() {
   const {id} = useParams();
   const [message, setMessage] = useState<string|undefined>('Loading...');
-  const [tour, setTour] = useState<Tournament>({} as Tournament);
+  const [tour, setTour] = useState<Tournament>({
+    players: [],
+    matches: [],
+    machines: [],
+    id: '',
+    name: '',
+    version: 0,
+  });
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showAddMachine, setShowAddMachine] = useState(false);
+  const [winner, setWinner] = useState<[Match, Player]>();
+
+  const setTournament = useCallback((t: Tournament) => {
+    for (const p of t.players) {
+      p.currentMatch = t.matches.find(m => !m.endTime && m.players.includes(p));
+      p.lastMatch = t.matches.findLast(m => !!m.endTime && m.players.includes(p));
+      p.timeInQueue = p.lastMatch? Math.round((new Date().getTime() - p.lastMatch!.endTime!.getTime())/1000/60) : undefined;
+    }
+    setTour(t);
+  }, []);
 
   useEffect(() => {
     fetch(`http://localhost:3000/tournaments/${id}`)
     .then(async resp => {
       if (resp.ok) {
         const body = await resp.json();
-        setTour(jsonParse((body).json));
+        setTournament(jsonParse((body).json));
         console.log('Tournament: %s', ((body).json));
         setMessage(undefined);
       }
@@ -70,45 +92,62 @@ export function TournamentApp() {
       console.error('error getting tournament', id, err);
       setMessage('Could not connect to server');
     });
-  }, [id]);
+  }, [id, setTournament]);
 
-  const update = useCallback((t: Tournament) => 
-    fetch(`http://localhost:3000/tournaments`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: jsonStringify({...t, version: t.version+1})})
+  const update = useCallback((t: Tournament, fake = false) => {
+    if (fake) {
+      setTournament(jsonParse(jsonStringify(t)));
+      console.log('fake update: ', jsonParse(jsonStringify(t)));
+      return;
+    }
+    return fetch(`http://localhost:3000/tournaments`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: jsonStringify({...t, version: t.version+1})})
     .then(async res => {
       if (res.ok) {
         const body = await res.json();
-        setTour(jsonParse((body).json));
+        setTournament(jsonParse((body).json));
       }
       else {
         console.error('error: ', res);
+        if (res.status === 400) {
+          alert('ERROR, someone else has this window open!  please refresh for latest changes (and stop doing that!)');
+        }
+        else {
+          alert('update failed, welp');
+        }
       }
     })
     .catch(err => {
       console.error('err: ', err);
-    })
-  , []);
+    });
+  }, [setTournament]);
 
+  const activeMatches = useMemo(() => tour.matches.filter(m => !m.endTime), [tour]);
+  const finishedMatches = useMemo(() => tour.matches.filter(m => !!m.endTime), [tour]);
+  const players = useMemo(() => tour.players.filter(p => !p.disabled), [tour]);
+  const machines = useMemo(() => tour.machines.filter(m => !m.disabled), [tour]);
+  const queue = useMemo(() => 
+    players.filter(p => !p.currentMatch)
+           .sort((a, b) => (a.lastMatch?.endTime?.getTime() ?? 0) - (b.lastMatch?.endTime?.getTime() ?? 0))
+  , [players]);
   const startTournament = useCallback(() => {
-    const players = [...tour.players];
-    for (const machine of tour.machines) {
+    const avail = [...players];
+    for (const machine of machines) {
       const match: Match = {
         num: tour.matches.length+1,
         machine,
-        players: players.take(2),
+        players: avail.take(2),
         startTime: new Date(),
       };
       tour.matches.push(match);
     }
     update(tour);
-    // setTour(jsonParse(jsonStringify(tour)));
-    // console.log(jsonParse(jsonStringify(tour)))
-  }, [tour, update]);
+  }, [tour, update, players, machines]);
 
-  const toggleState = useCallback((player: Player) => {
-    if (player.disabled)
-      delete player.disabled;
+  const toggleState = useCallback((row: {disabled?: true}) => {
+    if (row.disabled)
+      delete row.disabled;
     else
-      player.disabled = true;
+      row.disabled = true;
     // setPlayers(p => p.map(p => p===player? {...player} : {...p}));
     update(tour);
   }, [update, tour]);
@@ -119,32 +158,38 @@ export function TournamentApp() {
     setShowAddPlayer(false);
   }, [update, tour]);
 
-  const renderPlayer = useCallback((row: Player) => ([
-    'num',
-    'name',
-    <Cell><Button onClick={() => toggleState(row)}>
-      {row.disabled? 'ENABLE' : 'disable'}
-    </Button></Cell>,
-  ]), [toggleState]);
+  const nextPlayers = useMemo(() => {
+    if (!winner) return [];
+    return [...queue];
+  }, [winner, queue]);
 
-  const renderMachine = useCallback((row: Machine) => ([
-    'name',
-    <Cell><Button onClick={() => update({...tour, machines: tour.machines.filter(m => m!==row)})}>Remove</Button></Cell>,
-  ]), [tour, update]);
+  const newMatch = useCallback(async (opponent: Player) => {
+    if (!winner) throw new Error('no');
+    winner[0].endTime = new Date();
+    const loser = winner[0].players.find(p => p !== winner[1])!;
+    winner[0].result = [winner[1], loser];
+
+    const match: Match = {
+      startTime: new Date(),
+      players: [winner[0].players[1], opponent],
+      machine: winner[0].machine,
+      num: tour.matches.length + 1,
+    };
+    tour.matches.push(match);
+    await update(tour);
+    setWinner(undefined);
+  }, [winner, tour, update]);
 
   if (message)
     return <h1>{message}</h1>;
 
-  const activeMatches = tour.matches.filter(m => !m.endTime);
-  const finishedMatches = tour.matches.filter(m => !!m.endTime);
-  const queue = tour.players.filter(p => !activeMatches.find(m => m.players.includes(p)));
 
   return <>
     <h1>{tour.name}</h1>
     <Page>
       <Column>
         <FormGrid>
-          <Label>Target Queue Size: {tour.players.length - tour.machines.length*2}</Label>
+          <Label>Target Queue Size: {players.length - machines.length*2}</Label>
           {/* <Input onChange={e => {
             const size = parseInt(e.target.value, 10);
             update({...tour, queueSize: e.});
@@ -155,16 +200,22 @@ export function TournamentApp() {
         <Table data={tour.players}
           cols={['#', 'Name', 'Status']}
           expand="Name"
-          title={"Players: "+tour.players.length}
-          render={renderPlayer}
+          title={"Players: "+players.length}
+          render={(row: Player) => [
+            'num',
+            <Cell style={{textDecoration: row.disabled? 'line-through' : undefined}}>{row.name}</Cell>,
+            <Cell><Button onClick={() => toggleState(row)}>
+              {row.disabled? 'ENABLE' : 'disable'}
+            </Button></Cell>,
+          ]}
         />
         <Table data={queue}
-          cols={['#', 'Name']}
+          cols={['#', 'Name', 'Time in Queue']}
           expand="Name"
           title={"Queue: "+queue.length}
           render={p => [
             'num', 'name',
-            // <Cell>{finishedMatches.find(m => m.players.includes(p))?.endTime}
+            <Cell>{p.timeInQueue ?? 'N/A'}</Cell>,
           ]}
         />
         {showAddPlayer && <Modal onClose={() => setShowAddPlayer(false)}>
@@ -177,8 +228,13 @@ export function TournamentApp() {
         <Table data={tour.machines}
           cols={['Name', 'Actions']}
           expand="Name"
-          title={"Machines: "+tour.machines.length}
-          render={renderMachine}
+          title={"Machines: "+machines.length}
+          render={(row: Machine) => [
+            <Cell style={{textDecoration: row.disabled? 'line-through' : undefined}}>{row.name}</Cell>,
+            <Cell><Button onClick={() => toggleState(row)}>
+              {row.disabled? 'ENABLE' : 'disable'}
+            </Button></Cell>,
+          ]}
         />
         {showAddMachine && <Modal onClose={() => setShowAddMachine(false)}>
           <h3>Add Machine</h3>
@@ -194,13 +250,34 @@ export function TournamentApp() {
           render={m => [
             'num',
             <Cell>{m.machine.name}</Cell>,
-            <Cell>{m.players[0].name} <Button>Win</Button></Cell>,
-            <Cell>{m.players[1].name} <Button>Win</Button></Cell>,
+            <Cell>{m.players[0].name} <Button onClick={() => setWinner([m, m.players[0]])}>Win</Button></Cell>,
+            <Cell>{m.players[1].name} <Button onClick={() => setWinner([m, m.players[1]])}>Win</Button></Cell>,
           ]}
         />
-        {showAddMachine && <Modal onClose={() => setShowAddMachine(false)}>
-          <h3>Add Machine</h3>
-          <Form fields={['name']} onSubmit={data => { update({...tour, machines: [...tour.machines, data]}); setShowAddMachine(false); }} />
+        <Table data={finishedMatches}
+          cols={['#', 'Machine', 'Player 1', 'Player 2', 'Length']}
+          title="Completed Matches"
+          render={m => [
+            'num',
+            <Cell>{m.machine.name}</Cell>,
+            <Cell style={{border: m.players[0]===m.result[0]? '2px solid green': undefined}}>{m.players[0].name}</Cell>,
+            <Cell style={{border: m.players[1]===m.result[0]? '2px solid green': undefined}}>{m.players[1].name}</Cell>,
+            <Cell>{Math.round((m.endTime!.getTime() - m.startTime.getTime())/1000/60*10)/10}</Cell>,
+          ]}
+        />
+        {!!winner && <Modal onClose={() => setWinner(undefined)}>
+          <h3>Complete Match</h3>
+          <p>Winner: {winner[1].name}</p>
+          <Table data={nextPlayers}
+            cols={['', 'Name', 'Time in Queue']}
+            expand="Name"
+            title={"Select Opponent"}
+            render={(row: Player) => [
+              <Cell><Button onClick={() => newMatch(row)}>Select</Button></Cell>,
+              'name',
+              <Cell>{row.timeInQueue ?? 'N/A'}</Cell>,
+            ]}
+          />
         </Modal>}
       </Column>
     </Page>

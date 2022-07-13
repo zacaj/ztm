@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from "react";
+import React, {useEffect, useState, ReactNode} from "react";
 import styled from "styled-components";
 
 const Wrapper = styled.div<{cols: string}>`
@@ -27,7 +27,7 @@ const Title = styled.div`
   color: white;
 `;
 
-export function Table({data, cols, render, expand, title}: {data: {[key: string]:any}[], cols: string[], render?: (row: any) => (JSX.Element|string)[], expand?: string, title: string}) {
+export function Table({data, cols, render, expand, title}: {data: {[key: string]: any}[]; cols: string[]; render?: (row: any) => (ReactNode|string)[]; expand?: string; title: string}) {
   if (!data) return <>No data</>;
   return <Wrapper cols={cols.map(c => c===expand? '1fr' : 'auto').join(' ')}>
     <Title>{title}</Title>

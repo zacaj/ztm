@@ -56,7 +56,7 @@ module.exports = {
     // 	"allowNullable": true,
     // }],
     "@typescript-eslint/semi": [on, "always", {
-      "omitLastInOneLineBlock": true,
+      "omitLastInOneLineBlock": false,
     }],
     "@typescript-eslint/space-before-function-paren": [on, {
       "asyncArrow": "always",
