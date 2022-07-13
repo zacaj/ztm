@@ -50,9 +50,9 @@ export function removeCircular(o: any, seen = new Map<any, [number, any]>()): an
   return u;
 }
 export function addCircular(o: any, seen = new Map<number, any>()): any {
-  if (Array.isArray(o)) return o.map(e => removeCircular(e, seen));
+  if (Array.isArray(o)) return o.map(e => addCircular(e, seen));
   if (typeof o === 'string' && o.startsWith('circular_'))
-    return seen.get(parseInt(o.substr('_circular'.length), 10)) ?? `unresolved circular reference: '${o}'`;
+    return seen.get(parseInt(o.substr('circular_'.length), 10)) ?? `unresolved circular reference: '${o}'`;
   if (typeof o !== 'object') return o;
   if ('_circular' in o) {
     seen.set(o._circular, o);
@@ -84,3 +84,73 @@ export function jsonParse(str: string) {
     return value;
   })); 
 }
+
+declare global {
+  interface Array<T> {
+      remove(...elems: T[]): Array<T>;
+      clear(): Array<T>;
+      unique(): Array<T>;
+      set(arr: T[]): Array<T>;
+      last(): T|undefined;
+      minus(...elems: T[]): Array<T>;
+      shuffle(rand?: () => number, times?: number): this;
+      take(num: number, rand?: () => number): T[];
+      rand(rand?: () => number): T;
+      truthy(): Array<NonNullable<T>>;
+  }
+}
+
+Array.prototype.remove = function<T>(this: T[], ...elems: T[]): T[] {
+  for (const element of elems) {
+      let index: number;
+      while ((index = this.indexOf(element)) !== -1) {
+          this.splice(index, 1);
+      }
+  }
+  return this;
+};
+Array.prototype.clear = function<T>(this: T[]): T[] {
+  this.splice(0, this.length);
+  return this;
+};
+Array.prototype.unique = function<T>(this: T[]): T[] {
+  return [...new Set<T>(this)];
+};
+Array.prototype.set = function<T>(this: T[], that: T[]): T[] {
+  this.splice(0, this.length, ...that);
+  return this;
+};
+Array.prototype.last = function<T>(this: T[]): T|undefined {
+  return this[this.length - 1];
+};
+Array.prototype.minus = function<T>(this: T[], ...elems: T[]): T[] {
+  const arr = this.slice();
+  return arr.remove(...elems);
+};
+Array.prototype.shuffle = function<T>(this: T[], rand: () => number = () => Math.random(), times = 3): T[] {
+  for (let k=0; k<times; k++) {
+      for (let i = this.length - 1; i > 0; i--) {
+          const j = Math.floor(rand() * (i + 1));
+          [this[i], this[j]] = [this[j], this[i]];
+      }
+  }
+  return this;
+};
+Array.prototype.truthy = function<T>(this: T[]): NonNullable<T>[] {
+  return this.filter(x => !!x) as any;
+};
+
+Array.prototype.rand = function<T>(this: T[], rand: () => number = () => Math.random()): T {
+  const j = Math.floor(rand() * this.length);
+  return this[j];
+};
+
+Array.prototype.take = function<T>(this: T[], num: number, rand: () => number = () => Math.random()): T[] {
+  const ret: T[] = [];
+  for (let i=0; i<num; i++) {
+    const t = this.rand(rand);
+    this.remove(t);
+    ret.push(t);
+  }
+  return ret;
+};

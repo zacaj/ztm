@@ -13,10 +13,37 @@ content-type: application/json
   "name": "Test 1",
   "created": "2022-07-11T23:50:43.000Z",
   "tournament_id": "test1",
-  "version": 8,
-  "players":
-  [
-    {"num": 1, "name": "Zac"},
-    {"num": 2, "name": "Ron"}
+  "version": 32,
+  "matches": [],
+  "machines": [
+    {
+      "name": "Stars"
+    }
+  ],
+  "players": [
+    {
+      "num": 1,
+      "name": "Zac"
+    },
+    {
+      "num": 2,
+      "name": "Ron"
+    },
+    {
+      "name": "Steph",
+      "num": 3
+    },
+    {
+      "name": "Ray",
+      "num": 4
+    },
+    {
+      "name": "Bruce",
+      "num": 5
+    },
+    {
+      "name": "Los",
+      "num": 6
+    }
   ]
 }
