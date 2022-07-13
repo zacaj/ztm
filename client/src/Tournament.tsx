@@ -47,6 +47,8 @@ const Page = styled.div`
   flex-wrap: wrap;
 `;
 
+const baseUrl = process.env.NODE_ENV==='production'? 'http://zacaj.com:3000' : 'http://localhost:3000';
+
 export function TournamentApp() {
   const {id} = useParams();
   const [message, setMessage] = useState<string|undefined>('Loading...');
@@ -72,7 +74,7 @@ export function TournamentApp() {
   }, []);
 
   useEffect(() => {
-    fetch(`http://localhost:3000/tournaments/${id}`)
+    fetch(`${baseUrl}/tournaments/${id}`)
     .then(async resp => {
       if (resp.ok) {
         const body = await resp.json();
@@ -100,7 +102,7 @@ export function TournamentApp() {
       console.log('fake update: ', jsonParse(jsonStringify(t)));
       return;
     }
-    return fetch(`http://localhost:3000/tournaments`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: jsonStringify({...t, version: t.version+1})})
+    return fetch(`${baseUrl}/tournaments`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: jsonStringify({...t, version: t.version+1})})
     .then(async res => {
       if (res.ok) {
         const body = await res.json();
@@ -190,11 +192,6 @@ export function TournamentApp() {
       <Column>
         <FormGrid>
           <Label>Target Queue Size: {players.length - machines.length*2}</Label>
-          {/* <Input onChange={e => {
-            const size = parseInt(e.target.value, 10);
-            update({...tour, queueSize: e.});
-          }} /> */}
-
           <Button onClick={() => setShowAddPlayer(true)}>Add Player</Button>
         </FormGrid>
         <Table data={tour.players}
