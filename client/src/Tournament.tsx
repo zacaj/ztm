@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useState} from "react";
 import { Routes, Route, useParams } from "react-router-dom";
 import styled from "styled-components";
-import { Button } from "./common";
+import { Button, FormGrid, Input, jsonParse, jsonStringify, Label } from "./common";
 import { Form } from "./Form";
 import { Modal } from "./Modal";
 import { Cell, Table } from "./Table";
@@ -11,35 +11,49 @@ export type Tournament = {
   name: string;
   version: number;
   players: Player[];
+  matches: Match[];
+  machines: Machine[];
 };
 export type Player = {
   num: number;
   name: string;
   disabled?: true;
 };
+export type Machine = {
+  name: string;
+};
+export type Match = {
+  players: Player[]; // player
+  result: Player[]; // player
+  startTime: Date;
+  endTime?: Date;
+  machine: Machine;
+};
+
+const Column = styled.div`
+  display: flex;
+  flex-direction: column;
+  margin-right: 20px;
+`;
+const Page = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+`;
 
 export function TournamentApp() {
   const {id} = useParams();
-  const [message, setMessage] = useState<string>();
+  const [message, setMessage] = useState<string>('Loading...');
   const [tour, setTour] = useState<Tournament>({} as Tournament);
   const [showAddPlayer, setShowAddPlayer] = useState(false);
-  // const [players, setPlayers] = useState<Player[]>([]);
-
-  // useEffect(() => {
-  //   if (typeof tour === 'string') {
-  //     setPlayers([]);
-  //   }
-  //   else {
-  //     setPlayers(tour.players);
-  //   }
-  // }, [tour]);
+  const [showAddMachine, setShowAddMachine] = useState(false);
 
   useEffect(() => {
     fetch(`http://localhost:3000/tournaments/${id}`)
     .then(async resp => {
       if (resp.ok) {
         const body = await resp.json();
-        setTour(JSON.parse((body).json));
+        setTour(jsonParse((body).json));
+        console.log('Tournament: %s', ((body).json));
         setMessage(undefined);
       }
       else {
@@ -57,7 +71,7 @@ export function TournamentApp() {
   }, [id]);
 
   const update = useCallback((t: Tournament) => 
-    fetch(`http://localhost:3000/tournaments`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({...t, version: t.version+1}, null, 2)})
+    fetch(`http://localhost:3000/tournaments`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: jsonStringify({...t, version: t.version+1}, null, 2)})
     .then(async res => {
       if (res.ok) {
         const body = await res.json();
@@ -95,20 +109,53 @@ export function TournamentApp() {
     </Button></Cell>,
   ]), [toggleState]);
 
+  const renderMachine = useCallback((row: Machine) => ([
+    'name',
+    <Cell><Button onClick={() => update({...tour, machines: tour.machines.filter(m => m!==row)})}>Remove</Button></Cell>,
+  ]), [tour, update]);
+
   if (message)
     return <h1>{message}</h1>;
 
   return <>
     <h1>{tour.name}</h1>
-    <Button  onClick={() => setShowAddPlayer(true)}>Add Player</Button>
-    <Table data={tour.players}
-      cols={['#', 'Name', 'Status']}
-      expand="Name"
-      title="Players"
-      render={renderPlayer}
-    />
-    {showAddPlayer && <Modal onClose={() => setShowAddPlayer(false)}>
-      <Form fields={['name', 'ifpaNum']} onSubmit={addPlayer} />
-    </Modal>}
+    <Page>
+      <Column>
+        <FormGrid>
+          <Label>Queue Size: {tour.players.length - tour.machines.length*2}</Label>
+          {/* <Input onChange={e => {
+            const size = parseInt(e.target.value, 10);
+            update({...tour, queueSize: e.});
+          }} /> */}
+
+          <Button onClick={() => setShowAddPlayer(true)}>Add Player</Button>
+        </FormGrid>
+        <Table data={tour.players}
+          cols={['#', 'Name', 'Status']}
+          expand="Name"
+          title="Players"
+          render={renderPlayer}
+        />
+        {showAddPlayer && <Modal onClose={() => setShowAddPlayer(false)}>
+        <h3>Add Player</h3>
+          <Form fields={['name', 'ifpaNum']} onSubmit={addPlayer} />
+        </Modal>}
+      </Column>
+      <Column>
+        <FormGrid>
+          <Button onClick={() => setShowAddMachine(true)}>Add Machine</Button>
+        </FormGrid>
+        <Table data={tour.machines}
+          cols={['Name', 'Actions']}
+          expand="Name"
+          title="Machines"
+          render={renderMachine}
+        />
+        {showAddMachine && <Modal onClose={() => setShowAddMachine(false)}>
+          <h3>Add Machine</h3>
+          <Form fields={['name']} onSubmit={data => { update({...tour, machines: [...tour.machines, data]}); setShowAddMachine(false); }} />
+        </Modal>}
+      </Column>
+    </Page>
   </>;
 }
