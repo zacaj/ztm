@@ -69,20 +69,25 @@ app.put('/tournaments', async (req, res) => {
   }
 });
 
-async function main() {
+async function connect() {
   conn = await mysql.createConnection({
     host: 'localhost',
     user: 'ztm',
     database: 'ztm',
     password: 'ztm',
   });
+  conn.on('error', err => {
+    console.error('connection error ', err);
+    void connect();
+  });
   console.log('connected to db');
-
-  await new Promise<void>(r => app.listen(3000, r));
-  console.log('listening on port 3000');
 }
 
-main()
+connect()
+.then(async () => {
+  await new Promise<void>(r => app.listen(3000, r));
+  console.log('listening on port 3000');
+})
 .catch(err => {
   console.error('fatal error!', err);
 });

@@ -20,7 +20,8 @@ export type Player = {
   disabled?: true;
   lastMatch?: Match;
   currentMatch?: Match;
-  timeInQueue?: number;
+  timeInQueue?: number; // minutes
+  matches: number;
 };
 export type Machine = {
   name: string;
@@ -38,13 +39,14 @@ export type Match = {
 const Column = styled.div`
   display: flex;
   flex-direction: column;
-  margin-right: 20px;
-  flex-wrap: wrap;
+  margin-left: 20px;
+  // flex-wrap: wrap;
   gap: 5px;
 `;
 const Page = styled.div`
   display: flex;
-  flex-wrap: wrap;
+  // flex-wrap: wrap;
+  min-height: 0;
 `;
 
 const baseUrl = process.env.NODE_ENV==='production'? 'http://zacaj.com:3000' : 'http://localhost:3000';
@@ -62,18 +64,22 @@ export function TournamentApp() {
   });
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showAddMachine, setShowAddMachine] = useState(false);
+  const [fake, setFake] = useState(false);
   const [winner, setWinner] = useState<[Match, Player]>();
 
   const setTournament = useCallback((t: Tournament) => {
+    if (winner) debugger;
     for (const p of t.players) {
       p.currentMatch = t.matches.find(m => !m.endTime && m.players.includes(p));
       p.lastMatch = t.matches.findLast(m => !!m.endTime && m.players.includes(p));
-      p.timeInQueue = p.lastMatch? Math.round((new Date().getTime() - p.lastMatch!.endTime!.getTime())/1000/60) : undefined;
+      p.timeInQueue = p.lastMatch? Math.round((new Date().getTime() - p.lastMatch!.endTime!.getTime())/1000/60*10)/10 : undefined;
+      p.matches = t.matches.filter(m => m.players.includes(p)).length;
     }
     setTour(t);
-  }, []);
+  }, [winner]);
 
   useEffect(() => {
+    if (id === tour.id) return;
     fetch(`${baseUrl}/tournaments/${id}`)
     .then(async resp => {
       if (resp.ok) {
@@ -94,10 +100,10 @@ export function TournamentApp() {
       console.error('error getting tournament', id, err);
       setMessage('Could not connect to server');
     });
-  }, [id, setTournament]);
+  }, [id, setTournament, tour.id]);
 
-  const update = useCallback((t: Tournament, fake = false) => {
-    if (fake) {
+  const update = useCallback((t: Tournament, fakeUpdate = fake) => {
+    if (fakeUpdate) {
       setTournament(jsonParse(jsonStringify(t)));
       console.log('fake update: ', jsonParse(jsonStringify(t)));
       return;
@@ -121,19 +127,19 @@ export function TournamentApp() {
     .catch(err => {
       console.error('err: ', err);
     });
-  }, [setTournament]);
+  }, [setTournament, fake]);
 
   const activeMatches = useMemo(() => tour.matches.filter(m => !m.endTime), [tour]);
-  const finishedMatches = useMemo(() => tour.matches.filter(m => !!m.endTime), [tour]);
+  const finishedMatches = useMemo(() => tour.matches.filter(m => !!m.endTime).sort((a, b) => a.endTime!.getTime() - b.endTime!.getTime()), [tour]);
   const players = useMemo(() => tour.players.filter(p => !p.disabled), [tour]);
   const machines = useMemo(() => tour.machines.filter(m => !m.disabled), [tour]);
   const queue = useMemo(() => 
     players.filter(p => !p.currentMatch)
            .sort((a, b) => (a.lastMatch?.endTime?.getTime() ?? 0) - (b.lastMatch?.endTime?.getTime() ?? 0))
   , [players]);
-  const startTournament = useCallback(() => {
-    const avail = [...players];
-    for (const machine of machines) {
+  const addMatches = useCallback(() => {
+    const avail = [...queue];
+    for (const machine of machines.filter(m => !activeMatches.find(x => x.machine===m))) {
       const match: Match = {
         num: tour.matches.length+1,
         machine,
@@ -143,7 +149,7 @@ export function TournamentApp() {
       tour.matches.push(match);
     }
     update(tour);
-  }, [tour, update, players, machines]);
+  }, [tour, update, queue, machines, activeMatches]);
 
   const toggleState = useCallback((row: {disabled?: true}) => {
     if (row.disabled)
@@ -162,8 +168,50 @@ export function TournamentApp() {
 
   const nextPlayers = useMemo(() => {
     if (!winner) return [];
-    return [...queue];
-  }, [winner, queue]);
+    
+    const opponent = winner[0].players[1];
+    const machine = winner[0].machine;
+    const stats = queue.map(p => ({
+      player: p,
+      Heuristic: 0,
+      'Time': p.timeInQueue ?? 9999,
+      'Wins': finishedMatches.filter(m => m.result![0] === p).length,
+      'Matches': finishedMatches.filter(m => m.players.includes(p)).length,
+      'Times Played Player': finishedMatches.filter(m => m.players.includes(opponent) && m.players.includes(p)).length,
+      'Times Played Machine': finishedMatches.filter(m => m.machine === machine && m.players.includes(p)).length,
+      'H_Time': 0,
+      'H_Wins': 0,
+      'H_Matches': 0,
+      'H_Times Played Player': 0,
+      'H_Times Played Machine': 0,
+    }));
+    const weights: any = {
+      'Time': .5,
+      'Wins': -.45,
+      'Matches': -1,
+      'Times Played Player': -1.5,
+      'Times Played Machine': -1.1,
+    };    
+    const adj: any = {
+      'Time': stats.map(s => s['Time']).sum()/stats.length,
+      'Wins': finishedMatches.filter(m => m.result![0] === opponent).length,
+      'Matches': stats.map(s => s['Matches']).sum()/stats.length,
+      'Times Played Player': stats.map(s => s['Times Played Player']).sum()/stats.length,
+      'Times Played Machine': stats.map(s => s['Times Played Machine']).sum()/stats.length,
+    };
+    for (const stat of stats as any[]) {
+      stat.Heuristic = 0;
+      for (const key of Object.keys(weights)) {
+        stat['H_'+key] = Math.round(((stat[key] - adj[key]) * weights[key])*100)/100;
+        if (key === 'Wins')
+          stat['H_'+key] = Math.abs(stat['H_'+key]) * Math.sign(weights[key]);
+        stat.Heuristic += stat['H_'+key];
+      }
+      stat.Heuristic = Math.round(stat.Heuristic*100)/100;
+    }
+    stats.sort((a: any, b: any) => b.Heuristic - a.Heuristic);
+    return stats.filter(s => queue.includes(s.player));
+  }, [winner, queue, finishedMatches]);
 
   const newMatch = useCallback(async (opponent: Player) => {
     if (!winner) throw new Error('no');
@@ -178,8 +226,8 @@ export function TournamentApp() {
       num: tour.matches.length + 1,
     };
     tour.matches.push(match);
-    await update(tour);
     setWinner(undefined);
+    await update(tour);
   }, [winner, tour, update]);
 
   if (message)
@@ -195,12 +243,13 @@ export function TournamentApp() {
           <Button onClick={() => setShowAddPlayer(true)}>Add Player</Button>
         </FormGrid>
         <Table data={tour.players}
-          cols={['#', 'Name', 'Status']}
+          cols={['#', 'Name', 'Matches', 'Status']}
           expand="Name"
           title={"Players: "+players.length}
           render={(row: Player) => [
             'num',
             <Cell style={{textDecoration: row.disabled? 'line-through' : undefined}}>{row.name}</Cell>,
+            'matches',
             <Cell><Button onClick={() => toggleState(row)}>
               {row.disabled? 'ENABLE' : 'disable'}
             </Button></Cell>,
@@ -239,16 +288,17 @@ export function TournamentApp() {
         </Modal>}
       </Column>
       <Column>
-        {!activeMatches.length && <Button onClick={startTournament}>Start Tournament</Button>}
-        {!!activeMatches.length && <Button onClick={() => update({...tour, matches: []})}>Reset Tournament</Button>}
+        {/* <h3>Matches</h3> */}
+        {activeMatches.length!==machines.length && <Button onClick={addMatches}>Add Matches</Button>}
         <Table data={activeMatches}
-          cols={['#', 'Machine', 'Player 1', 'Player 2']}
+          cols={['#', 'Machine', 'Player 1', 'Player 2', 'Time']}
           title="Active Matches"
           render={m => [
             'num',
             <Cell>{m.machine.name}</Cell>,
             <Cell>{m.players[0].name} <Button onClick={() => setWinner([m, m.players[0]])}>Win</Button></Cell>,
             <Cell>{m.players[1].name} <Button onClick={() => setWinner([m, m.players[1]])}>Win</Button></Cell>,
+            <Cell>{Math.round((new Date()!.getTime() - m.startTime.getTime())/1000/60*10)/10}</Cell>,
           ]}
         />
         <Table data={finishedMatches}
@@ -265,17 +315,28 @@ export function TournamentApp() {
         {!!winner && <Modal onClose={() => setWinner(undefined)}>
           <h3>Complete Match</h3>
           <p>Winner: {winner[1].name}</p>
+          <p>
+            At machine: {winner[0].players[1].name} (
+            Wins: {finishedMatches.filter(m => m.result![0] === winner[0].players[1]).length}, 
+            Matches: {finishedMatches.filter(m => m.players.includes(winner[0].players[1])).length})
+          </p>
+          {/* {Object.keys(nextPlayers[0]).minus('player').join(',')} */}
           <Table data={nextPlayers}
-            cols={['', 'Name', 'Time in Queue']}
+            cols={['Choose Top V Avail V', 'Name', ...Object.keys(nextPlayers[0]).minus('player')]}
             expand="Name"
-            title={"Select Opponent"}
-            render={(row: Player) => [
-              <Cell><Button onClick={() => newMatch(row)}>Select</Button></Cell>,
-              'name',
-              <Cell>{row.timeInQueue ?? 'N/A'}</Cell>,
+            title={`Select ${winner[0].players[1].name}'s Opponent`}
+            render={(row: (typeof nextPlayers[number])) => [
+              <Cell><Button onClick={() => newMatch(row.player)}>Select</Button></Cell>,
+              <Cell>{row.player.name}</Cell>,
+              ...Object.keys(nextPlayers[0]).minus('player'),
             ]}
           />
         </Modal>}
+      </Column>
+      <Column>
+        <h3>Danger Panel</h3>        
+        {!!activeMatches.length && <Button onClick={() => update({...tour, matches: []})}>Reset Tournament</Button>}
+        <Button onClick={() => setFake(f => !f)}>Fake Mode: {fake? 'ON' : 'off'}</Button>
       </Column>
     </Page>
   </>;

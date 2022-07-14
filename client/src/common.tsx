@@ -97,6 +97,7 @@ declare global {
       take(num: number, rand?: () => number): T[];
       rand(rand?: () => number): T;
       truthy(): Array<NonNullable<T>>;
+      sum(conv?: (val: T, index: number) => number): number;
       findLast(pred: (e: T) => boolean): T|undefined;
   }
 }
@@ -127,6 +128,9 @@ Array.prototype.last = function<T>(this: T[]): T|undefined {
 Array.prototype.minus = function<T>(this: T[], ...elems: T[]): T[] {
   const arr = this.slice();
   return arr.remove(...elems);
+};
+Array.prototype.sum = function<T>(this: T[], conv?: (val: T, index: number) => number): number {
+    return this.reduce((prev, cur, index) => prev + (conv? conv(cur, index) : cur as any), 0);
 };
 Array.prototype.shuffle = function<T>(this: T[], rand: () => number = () => Math.random(), times = 3): T[] {
   for (let k=0; k<times; k++) {

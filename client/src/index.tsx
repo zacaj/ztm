@@ -7,6 +7,7 @@ import {
   Route,
 } from "react-router-dom";
 import { TournamentApp } from "./Tournament";
+import './styles.scss';
 
 const container = document.getElementById("root");
 const root = createRoot(container!);
