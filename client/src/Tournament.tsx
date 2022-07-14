@@ -4,7 +4,7 @@ import styled from "styled-components";
 import { baseUrl, Button, FormGrid, Input, jsonParse, jsonStringify, Label } from "./common";
 import { Form } from "./Form";
 import { Modal } from "./Modal";
-import { Cell, Table } from "./Table";
+import { Cell, Table } from "./Table";    
 
 export type Tournament = {
   id: string;
@@ -62,6 +62,7 @@ export function TournamentApp() {
   });
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showAddMachine, setShowAddMachine] = useState(false);
+  const [debugJson, setDebugJson] = useState<string>();
   const [fake, setFake] = useState(false);
   const [devMode, setDevMode] = useState(true);
   const [winner, setWinner] = useState<[Match, Player]>();
@@ -72,7 +73,7 @@ export function TournamentApp() {
       p.currentMatch = t.matches.find(m => !m.endTime && m.players.includes(p));
       p.lastMatch = t.matches.findLast(m => !!m.endTime && m.players.includes(p));
       p.timeInQueue = p.lastMatch? Math.round((new Date().getTime() - p.lastMatch!.endTime!.getTime())/1000/60*10)/10 : undefined;
-      p.matches = t.matches.filter(m => m.players.includes(p)).length;
+      p.matches = t.matches.filter(m => m.players.includes(p) && !!m.endTime).length;
     }
     setTour(t);
   }, [winner]);
@@ -229,6 +230,17 @@ export function TournamentApp() {
     await update(tour);
   }, [winner, tour, update]);
 
+  const debugError = useMemo(() => {
+    if (!debugJson) return;
+    try {
+      jsonParse(debugJson);
+    }
+    catch (err) {
+      return ''+err;
+    }
+    return;
+  }, [debugJson]);
+
   if (message)
     return <h1>{message}</h1>;
 
@@ -237,23 +249,6 @@ export function TournamentApp() {
     <h1>{tour.name}</h1>
     <Page>
       <Column>
-        <FormGrid>
-          <Label>Target Queue Size: {players.length - machines.length*2}</Label>
-          <Button onClick={() => setShowAddPlayer(true)}>Add Player</Button>
-        </FormGrid>
-        <Table data={tour.players}
-          cols={['#', 'Name', 'Matches', 'Status']}
-          expand="Name"
-          title={"Players: "+players.length}
-          render={(row: Player) => [
-            'num',
-            <Cell style={{textDecoration: row.disabled? 'line-through' : undefined}}>{row.name}</Cell>,
-            'matches',
-            <Cell><Button onClick={() => toggleState(row)}>
-              {row.disabled? 'ENABLE' : 'disable'}
-            </Button></Cell>,
-          ]}
-        />
         <Table data={queue}
           cols={['#', 'Name', 'Time in Queue']}
           expand="Name"
@@ -263,11 +258,8 @@ export function TournamentApp() {
             <Cell>{p.timeInQueue ?? 'N/A'}</Cell>,
           ]}
         />
-        {showAddPlayer && <Modal onClose={() => setShowAddPlayer(false)}>
-        <h3>Add Player</h3>
-          <Form fields={['name', 'ifpaNum']} onSubmit={addPlayer} />
-        </Modal>}
         <FormGrid>
+          <Label>Target Queue Size: {players.length - machines.length*2}</Label>
           <Button onClick={() => setShowAddMachine(true)}>Add Machine</Button>
         </FormGrid>
         <Table data={tour.machines}
@@ -333,12 +325,45 @@ export function TournamentApp() {
         </Modal>}
       </Column>
       <Column>
+        <FormGrid>
+          <Button onClick={() => setShowAddPlayer(true)}>Add Player</Button>
+        </FormGrid>
+        <Table data={tour.players}
+          cols={['#', 'Name', 'Matches', 'Status']}
+          expand="Name"
+          title={"Players: "+players.length}
+          render={(row: Player) => [
+            'num',
+            <Cell style={{textDecoration: row.disabled? 'line-through' : undefined}}>{row.name}</Cell>,
+            'matches',
+            <Cell><Button onClick={() => toggleState(row)}>
+              {row.disabled? 'ENABLE' : 'disable'}
+            </Button></Cell>,
+          ]}
+        />
+        {showAddPlayer && <Modal onClose={() => setShowAddPlayer(false)}>
+        <h3>Add Player</h3>
+          <Form fields={['name', 'ifpaNum']} onSubmit={addPlayer} />
+        </Modal>}
         <h3>Danger Zone</h3>        
         {!!activeMatches.length && <Button onClick={() => update({...tour, matches: []})}>Reset Tournament</Button>}
         <Button onClick={() => setFake(f => !f)}>Fake Mode: {fake? 'ON' : 'off'}</Button>
         <Button onClick={() => setDevMode(f => !f)}>Dev Mode: {devMode? 'ON' : 'off'}</Button>
+        <Button onClick={() => setDebugJson(jsonStringify(tour))}>Debug</Button>
         <Link to={`/${id}`} target="_blank">Viewer</Link>
         <Link to={`/${id}/standings`} target="_blank">Standings</Link>
+        {!!debugJson && <Modal onClose={() => setDebugJson(undefined)}>
+          <h3>Debug</h3>
+          <textarea onChange={e => setDebugJson(e.target.value)} value={debugJson} style={{width: '60vw', height: '80vh'}} onKeyDown={event => {if (event.keyCode===9) {const v=event.target.value; const s=event.target.selectionStart; const e=event.target.selectionEnd;event.target.value=v.substring(0, s)+'  '+v.substring(e);event.target.selectionStart=event.target.selectionEnd=s+2;event.preventDefault();return false;}}} />
+          {!!debugError && <>
+            <Label>Error:</Label>
+            <p style={{whiteSpace: 'pre-wrap'}}>{debugError}</p>
+          </>}
+          <Button disabled={!!debugError} onClick={async () => {
+            await update(jsonParse(debugJson));
+            setDebugJson(undefined);
+          }}>Save</Button>
+        </Modal>}
       </Column>
     </Page>
   </>;

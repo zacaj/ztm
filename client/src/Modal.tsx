@@ -19,6 +19,11 @@ const Root = styled.div`
   background: white;
   padding: 8px;
   z-index: 2;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  max-width: 90vh;
+  overflow: auto;
 `;
 
 
