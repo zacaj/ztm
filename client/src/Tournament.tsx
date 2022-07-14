@@ -65,7 +65,7 @@ export function TournamentApp() {
   const [debugJson, setDebugJson] = useState<string>();
   const [fake, setFake] = useState(false);
   const [devMode, setDevMode] = useState(true);
-  const [winner, setWinner] = useState<[Match, Player]>();
+  const [winner, setWinner] = useState<[Match, Player, Machine]>();
 
   const setTournament = useCallback((t: Tournament) => {
     if (winner) debugger;
@@ -222,7 +222,7 @@ export function TournamentApp() {
     const match: Match = {
       startTime: new Date(),
       players: [winner[0].players[1], opponent],
-      machine: winner[0].machine,
+      machine: winner[2],
       num: tour.matches.length + 1,
     };
     tour.matches.push(match);
@@ -287,8 +287,8 @@ export function TournamentApp() {
           render={m => [
             'num',
             <Cell>{m.machine.name}</Cell>,
-            <Cell>{m.players[0].name} <Button onClick={() => setWinner([m, m.players[0]])}>Win</Button></Cell>,
-            <Cell>{m.players[1].name} <Button onClick={() => setWinner([m, m.players[1]])}>Win</Button></Cell>,
+            <Cell>{m.players[0].name} <Button onClick={() => setWinner([m, m.players[0], m.machine])}>Win</Button></Cell>,
+            <Cell>{m.players[1].name} <Button onClick={() => setWinner([m, m.players[1], m.machine])}>Win</Button></Cell>,
             <Cell>{Math.round((new Date()!.getTime() - m.startTime.getTime())/1000/60*10)/10}</Cell>,
           ]}
         />
@@ -311,13 +311,19 @@ export function TournamentApp() {
             Wins: {finishedMatches.filter(m => m.result![0] === winner[0].players[1]).length}, 
             Matches: {finishedMatches.filter(m => m.players.includes(winner[0].players[1])).length})
           </p>
+          {!!winner[2].disabled && <div style={{border: "2x solid yellow"}}>
+            <Label>Machine {winner[2].name} is disabled, please choose a replacement:</Label>
+            {machines.filter(m => !activeMatches.find(x => x.machine === m)).map(m =>
+              <Button onClick={() => setWinner([winner[0], winner[1], m])}>{m.name}</Button>,
+            )}
+          </div>}
           {/* {Object.keys(nextPlayers[0]).minus('player').join(',')} */}
           <Table data={nextPlayers}
             cols={['Choose Top V Avail V', 'Name', ...Object.keys(nextPlayers[0]).minus('player').filter(k => devMode || !k.startsWith('H_'))]}
             expand="Name"
             title={`Select ${winner[0].players[1].name}'s Opponent`}
             render={(row: (typeof nextPlayers[number])) => [
-              <Cell><Button onClick={() => newMatch(row.player)}>Select</Button></Cell>,
+              <Cell><Button onClick={() => newMatch(row.player)} disabled={winner[2].disabled}>Select</Button></Cell>,
               <Cell>{row.player.name}</Cell>,
               ...Object.keys(nextPlayers[0]).minus('player').filter(k => devMode || !k.startsWith('H_')),
             ]}
