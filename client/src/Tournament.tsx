@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useMemo, useState} from "react";
-import { Routes, Route, useParams } from "react-router-dom";
+import { Routes, Route, useParams, Link } from "react-router-dom";
 import styled from "styled-components";
-import { Button, FormGrid, Input, jsonParse, jsonStringify, Label } from "./common";
+import { baseUrl, Button, FormGrid, Input, jsonParse, jsonStringify, Label } from "./common";
 import { Form } from "./Form";
 import { Modal } from "./Modal";
 import { Cell, Table } from "./Table";
@@ -36,20 +36,18 @@ export type Match = {
   machine: Machine;
 };
 
-const Column = styled.div`
+export const Column = styled.div`
   display: flex;
   flex-direction: column;
   margin-left: 20px;
   // flex-wrap: wrap;
   gap: 5px;
 `;
-const Page = styled.div`
+export const Page = styled.div`
   display: flex;
   // flex-wrap: wrap;
   min-height: 0;
 `;
-
-const baseUrl = process.env.NODE_ENV==='production'? 'http://zacaj.com:3000' : 'http://localhost:3000';
 
 export function TournamentApp() {
   const {id} = useParams();
@@ -65,6 +63,7 @@ export function TournamentApp() {
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showAddMachine, setShowAddMachine] = useState(false);
   const [fake, setFake] = useState(false);
+  const [devMode, setDevMode] = useState(true);
   const [winner, setWinner] = useState<[Match, Player]>();
 
   const setTournament = useCallback((t: Tournament) => {
@@ -322,21 +321,24 @@ export function TournamentApp() {
           </p>
           {/* {Object.keys(nextPlayers[0]).minus('player').join(',')} */}
           <Table data={nextPlayers}
-            cols={['Choose Top V Avail V', 'Name', ...Object.keys(nextPlayers[0]).minus('player')]}
+            cols={['Choose Top V Avail V', 'Name', ...Object.keys(nextPlayers[0]).minus('player').filter(k => devMode || !k.startsWith('H_'))]}
             expand="Name"
             title={`Select ${winner[0].players[1].name}'s Opponent`}
             render={(row: (typeof nextPlayers[number])) => [
               <Cell><Button onClick={() => newMatch(row.player)}>Select</Button></Cell>,
               <Cell>{row.player.name}</Cell>,
-              ...Object.keys(nextPlayers[0]).minus('player'),
+              ...Object.keys(nextPlayers[0]).minus('player').filter(k => devMode || !k.startsWith('H_')),
             ]}
           />
         </Modal>}
       </Column>
       <Column>
-        <h3>Danger Panel</h3>        
+        <h3>Danger Zone</h3>        
         {!!activeMatches.length && <Button onClick={() => update({...tour, matches: []})}>Reset Tournament</Button>}
         <Button onClick={() => setFake(f => !f)}>Fake Mode: {fake? 'ON' : 'off'}</Button>
+        <Button onClick={() => setDevMode(f => !f)}>Dev Mode: {devMode? 'ON' : 'off'}</Button>
+        <Link to={`/${id}`} target="_blank">Viewer</Link>
+        <Link to={`/${id}/standings`} target="_blank">Standings</Link>
       </Column>
     </Page>
   </>;

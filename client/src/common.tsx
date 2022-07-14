@@ -99,8 +99,11 @@ declare global {
       truthy(): Array<NonNullable<T>>;
       sum(conv?: (val: T, index: number) => number): number;
       findLast(pred: (e: T) => boolean): T|undefined;
+      count(pred: (e: T) => boolean): number;
   }
 }
+
+export const baseUrl = process.env.NODE_ENV==='production'? 'http://zacaj.com:3000' : 'http://localhost:3000';
 
 Array.prototype.remove = function<T>(this: T[], ...elems: T[]): T[] {
   for (const element of elems) {
@@ -166,4 +169,12 @@ Array.prototype.findLast = function<T>(this: T[], pred: (e: T) => boolean): T|un
       return this[i];
   }
   return undefined;
+};
+Array.prototype.count = function<T>(this: T[], pred: (e: T) => boolean): number {
+  let count = 0;
+  for (let i = this.length-1; i>=0; i--) {
+    if (pred(this[i]))
+      count++;
+  }
+  return count;
 };
